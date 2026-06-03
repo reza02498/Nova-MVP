@@ -19,4 +19,7 @@ captures/
 *.log
 .vscode/
 *.zip
-!sdk-packages/*.zip
+
+sdk-packages/
+build.sh
+mvp_prompt.md

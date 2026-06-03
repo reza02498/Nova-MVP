@@ -24,9 +24,7 @@ class SettingsViewModel @Inject constructor(
     private val prefs: PreferencesManager
 ) : ViewModel() {
 
-    val state = prefs.preferences.collectAsStateWithLifecycle(
-        initialValue = AppPreferences()
-    )
+    val preferences = prefs.preferences
 
     fun setSpeechRate(rate: Float) {
         viewModelScope.launch { prefs.setSpeechRate(rate) }
@@ -43,7 +41,9 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
-    val prefs by viewModel.state
+    val prefs by viewModel.preferences.collectAsStateWithLifecycle(
+        initialValue = AppPreferences()
+    )
 
     Scaffold(
         topBar = {

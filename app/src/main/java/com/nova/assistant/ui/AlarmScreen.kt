@@ -1,13 +1,14 @@
 package com.nova.assistant.ui
 
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.media.MediaPlayer
-import android.content.Context
 import android.media.RingtoneManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -26,12 +27,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nova.assistant.ui.theme.NovaTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+class AlarmScreen : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            NovaTheme {
+                AlarmScreenContent()
+            }
+        }
+    }
+}
+
 @Composable
-fun AlarmScreen() {
+fun AlarmScreenContent() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as ComponentActivity
 
