@@ -4,11 +4,12 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [AlarmEntity::class, ConversationEntity::class, NotificationEntity::class],
-    version = 1,
+    entities = [NoteEntity::class, AlarmEntity::class, ConversationEntity::class, NotificationEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class NovaDatabase : RoomDatabase() {
+    abstract fun noteDao(): NoteDao
     abstract fun alarmDao(): AlarmDao
     abstract fun conversationDao(): ConversationDao
     abstract fun notificationDao(): NotificationDao

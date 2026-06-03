@@ -41,6 +41,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val prefs by viewModel.preferences.collectAsStateWithLifecycle(
         initialValue = AppPreferences()
     )
@@ -99,6 +100,24 @@ fun SettingsScreen(
                             label = { Text("English") }
                         )
                     }
+                }
+            }
+
+            Divider()
+
+            // TTS Persian Download
+            Text("صدای فارسی", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("اگر Nova با صدای انگلیسی صحبت می‌کند، بسته صدای فارسی گوگل را دانلود کنید:")
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val intent = android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) { Text("دانلود بسته صدای فارسی") }
                 }
             }
 

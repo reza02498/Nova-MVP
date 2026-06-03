@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.nova.assistant.data.AlarmDao
 import com.nova.assistant.data.ConversationDao
+import com.nova.assistant.data.NoteDao
 import com.nova.assistant.data.NotificationDao
 import com.nova.assistant.data.NovaDatabase
 import com.nova.assistant.util.TtsManager
@@ -27,6 +28,9 @@ object AppModule {
             NovaDatabase.NAME
         ).fallbackToDestructiveMigration().build()
     }
+
+    @Provides
+    fun provideNoteDao(db: NovaDatabase): NoteDao = db.noteDao()
 
     @Provides
     fun provideAlarmDao(db: NovaDatabase): AlarmDao = db.alarmDao()

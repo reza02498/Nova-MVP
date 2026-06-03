@@ -9,25 +9,57 @@ import java.util.Locale
 class TtsManager(context: Context) {
 
     private var tts: TextToSpeech? = null
-    private var isInitialized = false
+    @Volatile private var isReady = false
     private var currentRate = 1.0f
+    private var currentLocale: Locale = Locale("fa")
 
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val faResult = tts?.setLanguage(Locale.forLanguageTag("fa-IR"))
-                if (faResult == TextToSpeech.LANG_MISSING_DATA ||
-                    faResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    tts?.setLanguage(Locale.US)
-                }
-                isInitialized = true
+                // Try multiple Persian locale formats (different devices support different ones)
+                currentLocale = findBestPersianLocale()
+                tts?.setLanguage(currentLocale)
+                isReady = true
             }
         }
     }
 
+    private fun findBestPersianLocale(): Locale {
+        val persianLocales = listOf(
+            Locale("fa", "IR"),       // fa-IR — standard Persian
+            Locale("fa"),             // fa — generic Persian
+            Locale.forLanguageTag("fa-IR"), // BCP 47 tag
+            Locale("ar"),             // Arabic (fallback — similar TTS)
+        )
+
+        for (locale in persianLocales) {
+            val result = tts?.setLanguage(locale) ?: continue
+            if (result != TextToSpeech.LANG_MISSING_DATA &&
+                result != TextToSpeech.LANG_NOT_SUPPORTED) {
+                return locale
+            }
+        }
+
+        // Absolutely nothing works — use whatever is available
+        return Locale.getDefault()
+    }
+
     fun speak(text: String, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
-        if (!isInitialized) return
+        if (!isReady || tts == null) {
+            // TTS not ready yet — queue or retry
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                speak(text, onStart, onDone)
+            }, 500)
+            return
+        }
+
+        // Always ensure Persian locale is set before speaking
+        if (tts?.language != currentLocale) {
+            tts?.setLanguage(currentLocale)
+        }
+
         tts?.setSpeechRate(currentRate)
+        tts?.setPitch(1.0f)
 
         val utteranceId = "nova_${System.currentTimeMillis()}"
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {

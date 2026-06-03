@@ -4,6 +4,17 @@ import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface NoteDao {
+    @Insert suspend fun insert(note: NoteEntity): Long
+    @Delete suspend fun delete(note: NoteEntity)
+    @Query("SELECT * FROM notes ORDER BY createdAt DESC") suspend fun getAll(): List<NoteEntity>
+    @Query("SELECT * FROM notes WHERE id = :id") suspend fun getById(id: Long): NoteEntity?
+    @Query("SELECT * FROM notes WHERE content LIKE '%' || :query || '%' ORDER BY createdAt DESC") suspend fun search(query: String): List<NoteEntity>
+    @Query("DELETE FROM notes WHERE id = :id") suspend fun deleteById(id: Long)
+    @Query("DELETE FROM notes") suspend fun deleteAll()
+}
+
+@Dao
 interface AlarmDao {
     @Insert
     suspend fun insert(alarm: AlarmEntity): Long
