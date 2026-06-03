@@ -1,0 +1,228 @@
+package com.nova.assistant.domain
+
+import com.nova.assistant.data.AlarmDao
+import com.nova.assistant.data.AlarmEntity
+import com.nova.assistant.data.ConversationDao
+import com.nova.assistant.data.ConversationEntity
+import com.nova.assistant.data.NotificationDao
+import com.nova.assistant.service.AlarmScheduler
+import com.nova.assistant.util.TtsManager
+import kotlinx.coroutines.flow.first
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class CommandExecutor @Inject constructor(
+    private val alarmDao: AlarmDao,
+    private val conversationDao: ConversationDao,
+    private val notificationDao: NotificationDao,
+    private val alarmScheduler: AlarmScheduler,
+    private val ttsManager: TtsManager
+) {
+    suspend fun execute(command: Command, inputType: String): String {
+        val response = executeInternal(command)
+        // Save conversation
+        conversationDao.insert(
+            ConversationEntity(
+                userMessage = commandDisplayText(command),
+                assistantResponse = response,
+                inputType = inputType
+            )
+        )
+        return response
+    }
+
+    private suspend fun executeInternal(command: Command): String = when (command) {
+        // ─── ALARMS ───
+        is Command.SetAlarm -> {
+            val alarm = AlarmEntity(
+                title = command.label ?: "آلارم",
+                triggerTime = calculateTriggerTime(command.time)
+            )
+            val id = alarmDao.insert(alarm)
+            alarmScheduler.schedule(alarm.copy(id = id))
+            "آلارم برای ${formatTime(command.time)} تنظیم شد."
+        }
+
+        is Command.SetReminder -> {
+            val triggerTime = command.dateTime
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+            val alarm = AlarmEntity(
+                title = command.task,
+                description = "یادآوری",
+                triggerTime = triggerTime
+            )
+            val id = alarmDao.insert(alarm)
+            alarmScheduler.schedule(alarm.copy(id = id))
+            "یادآوری «${command.task}» برای ${formatDateTime(command.dateTime)} تنظیم شد."
+        }
+
+        is Command.ListAlarms -> {
+            val alarms = alarmDao.getAllActive()
+            if (alarms.isEmpty()) "هیچ آلارم فعالی نداری."
+            else {
+                alarms.joinToString("\n") { alarm ->
+                    val time = formatEpochMillis(alarm.triggerTime)
+                    "• ${alarm.id}. ${alarm.title} — $time"
+                }
+            }
+        }
+
+        is Command.CancelAlarm -> {
+            val alarm = alarmDao.getById(command.alarmId)
+            if (alarm != null) {
+                alarmScheduler.cancel(command.alarmId)
+                alarmDao.delete(alarm)
+                "آلارم «${alarm.title}» حذف شد."
+            } else {
+                "آلارمی با این شماره پیدا نشد."
+            }
+        }
+
+        is Command.CancelAllAlarms -> {
+            val count = alarmDao.getAllActive().size
+            alarmDao.deleteAll()
+            alarmScheduler.cancelAll()
+            if (count == 0) "هیچ آلارمی برای حذف وجود نداشت."
+            else "$count آلارم حذف شد."
+        }
+
+        is Command.Snooze -> {
+            alarmScheduler.scheduleSnooze(command.minutes)
+            "${command.minutes} دقیقه دیگه دوباره بهت یادآوری می‌کنم."
+        }
+
+        // ─── NOTIFICATIONS ───
+        is Command.ReadNotifications -> {
+            val notifications = notificationDao.getRecent(10)
+            if (notifications.isEmpty()) "پیام جدیدی نداری."
+            else {
+                notifications.forEach { notificationDao.markAsRead(it.id) }
+                notifications.joinToString("\n") { n ->
+                    "${n.appName}: ${n.senderName} می‌گه «${n.content.take(100)}»"
+                }
+            }
+        }
+
+        is Command.ReadLastMessage -> {
+            val last = notificationDao.getLast()
+            if (last == null) "هنوز پیامی دریافت نشده."
+            else {
+                notificationDao.markAsRead(last.id)
+                "${last.appName} از ${last.senderName}: ${last.content}"
+            }
+        }
+
+        // ─── READING CONTROLS ───
+        is Command.StopReading -> { ttsManager.stop(); "باشه." }
+        is Command.ReadFaster -> { ttsManager.increaseRate(); "سرعت بیشتر." }
+        is Command.ReadSlower -> { ttsManager.decreaseRate(); "سرعت کمتر." }
+
+        // ─── GENERAL ───
+        is Command.GetTime -> {
+            val now = java.time.LocalTime.now()
+            "الان ساعت ${now.hour}:${String.format("%02d", now.minute)} است."
+        }
+
+        is Command.GetDate -> {
+            val now = LocalDate.now(ZoneId.of("Asia/Tehran"))
+            formatJalaliDate(now)
+        }
+
+        is Command.Help -> """
+            |من می‌تونم این کارها رو برات انجام بدم:
+            |
+            |🔔 آلارم: «آلارم بذار برای ساعت ۷ صبح»
+            |📝 یادآوری: «یادآوری کن نون بخرم فردا ساعت ۱۰»
+            |📋 لیست آلارم‌ها: «آلارما رو نشون بده»
+            |❌ حذف آلارم: «آلارم ۱ رو کنسل کن»
+            |📩 خوندن پیام‌ها: «پیامامو بخون»
+            |⏰ ساعت: «ساعت چنده»
+            |📅 تاریخ: «امروز چندمه»
+        """.trimMargin()
+        }
+
+        is Command.OpenSettings -> "تنظیمات" // handled by navigation
+        is Command.ClearHistory -> { conversationDao.deleteAll(); "تاریخچه گفتگو پاک شد." }
+        is Command.Unknown -> "متوجه نشدم. لطفاً دوباره بگید یا «راهنما» رو بگید."
+    }
+
+    // ─── TIME HELPERS ───
+
+    private fun calculateTriggerTime(time: LocalTime): Long {
+        val now = java.time.ZonedDateTime.now(ZoneId.systemDefault())
+        val target = now.withHour(time.hour).withMinute(time.minute).withSecond(0)
+        return if (target.isBefore(now) || target == now) {
+            target.plusDays(1).toInstant().toEpochMilli()
+        } else {
+            target.toInstant().toEpochMilli()
+        }
+    }
+
+    private fun formatTime(time: LocalTime): String {
+        return "${time.hour}:${String.format("%02d", time.minute)}"
+    }
+
+    private fun formatDateTime(dateTime: java.time.LocalDateTime): String {
+        val now = LocalDate.now(ZoneId.of("Asia/Tehran"))
+        val date = dateTime.toLocalDate()
+        val timeStr = formatTime(dateTime.toLocalTime())
+        val dayStr = when {
+            date == now -> "امروز"
+            date == now.plusDays(1) -> "فردا"
+            date == now.plusDays(2) -> "پس فردا"
+            else -> "${date.year}/${date.monthValue}/${date.dayOfMonth}"
+        }
+        return "$dayStr ساعت $timeStr"
+    }
+
+    private fun formatEpochMillis(millis: Long): String {
+        val instant = java.time.Instant.ofEpochMilli(millis)
+        val dt = java.time.LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+        return "${dt.hour}:${String.format("%02d", dt.minute)}"
+    }
+
+    private fun formatJalaliDate(date: LocalDate): String {
+        // Simple approximate Jalali conversion
+        val jalaliYear = date.year - 621
+        val dayOfYear = date.dayOfYear
+        val jalaliMonths = listOf(
+            "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+            "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+        )
+        val monthStarts = listOf(1, 32, 63, 94, 125, 156, 187, 217, 248, 278, 309, 339)
+        var month = 11
+        for (i in monthStarts.indices.reversed()) {
+            if (dayOfYear >= monthStarts[i]) { month = i; break }
+        }
+        val day = dayOfYear - monthStarts[month] + 1
+        return "امروز $day ${jalaliMonths[month]} $jalaliYear است."
+    }
+
+    private fun commandDisplayText(command: Command): String = when (command) {
+        is Command.SetAlarm -> "آلارم برای ساعت ${formatTime(command.time)}"
+        is Command.SetReminder -> "یادآوری «${command.task}»"
+        is Command.ListAlarms -> "آلارما رو نشون بده"
+        is Command.CancelAlarm -> "حذف آلارم ${command.alarmId}"
+        is Command.CancelAllAlarms -> "حذف همه آلارم‌ها"
+        is Command.Snooze -> "چرت ${command.minutes} دقیقه"
+        is Command.ReadNotifications -> "پیامامو بخون"
+        is Command.ReadLastMessage -> "آخرین پیام"
+        is Command.StopReading -> "بس کن"
+        is Command.ReadFaster -> "تندتر"
+        is Command.ReadSlower -> "یواشتر"
+        is Command.GetTime -> "ساعت چنده"
+        is Command.GetDate -> "امروز چندمه"
+        is Command.Help -> "راهنما"
+        is Command.OpenSettings -> "تنظیمات"
+        is Command.ClearHistory -> "پاک کردن تاریخچه"
+        is Command.Unknown -> "?"
+    }
+}
