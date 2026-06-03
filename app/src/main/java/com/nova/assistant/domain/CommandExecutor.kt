@@ -316,6 +316,13 @@ class CommandExecutor @Inject constructor(
         is Command.Help -> "راهنما"
         is Command.OpenSettings -> "تنظیمات"
         is Command.ClearHistory -> "پاک کردن تاریخچه"
+        is Command.CreateNote -> "یادداشت جدید"
+        is Command.ListNotes -> "نمایش یادداشت‌ها"
+        is Command.DeleteNote -> "حذف یادداشت ${command.id}"
+        is Command.SearchNotes -> "جستجوی یادداشت"
+        is Command.SetTimer -> "تایمر ${command.minutes} دقیقه"
+        is Command.CancelTimer -> "قطع تایمر"
+        is Command.DeviceToggle -> "تنظیم دستگاه"
         is Command.Unknown -> "?"
     }
 }
