@@ -147,7 +147,6 @@ class CommandExecutor @Inject constructor(
             |⏰ ساعت: «ساعت چنده»
             |📅 تاریخ: «امروز چندمه»
         """.trimMargin()
-        }
 
         is Command.OpenSettings -> "تنظیمات" // handled by navigation
         is Command.ClearHistory -> { conversationDao.deleteAll(); "تاریخچه گفتگو پاک شد." }
