@@ -31,7 +31,8 @@ data class MainUiState(
     val rmsLevel: Float = 0f,
     val errorMessage: String? = null,
     val navigateToSettings: Boolean = false,
-    val navigateToAlarm: Pair<Long, String>? = null
+    val navigateToAlarm: Pair<Long, String>? = null,
+    val showVoiceGuide: Boolean = false
 )
 
 @HiltViewModel
@@ -75,7 +76,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun startVoiceInput(context: android.content.Context) {
-        _state.update { it.copy(isListening = true, partialResult = "", errorMessage = null) }
+        _state.update { it.copy(isListening = true, partialResult = "", errorMessage = null, showVoiceGuide = false) }
 
         speechRecognizer = SpeechRecognizerManager(context)
         speechRecognizer?.startListening(
@@ -87,12 +88,20 @@ class MainViewModel @Inject constructor(
                 _state.update { it.copy(partialResult = partial) }
             },
             onError = { error ->
-                _state.update { it.copy(isListening = false, errorMessage = error) }
+                if (error.contains("بسته زبان") || error.contains("دانلود") || error.contains("تشخیص گفتار")) {
+                    _state.update { it.copy(isListening = false, showVoiceGuide = true) }
+                } else {
+                    _state.update { it.copy(isListening = false, errorMessage = error) }
+                }
             },
             onRmsChanged = { rms ->
                 _state.update { it.copy(rmsLevel = rms) }
             }
         )
+    }
+
+    fun dismissVoiceGuide() {
+        _state.update { it.copy(showVoiceGuide = false) }
     }
 
     fun stopVoiceInput() {
