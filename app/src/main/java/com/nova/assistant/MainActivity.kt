@@ -4,7 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -33,21 +38,12 @@ fun NovaNavGraph() {
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
             MainScreen(
-                onNavigateToSettings = {
-                    navController.navigate("settings")
-                },
-                onNavigateToAlarm = { alarmId, title ->
-                    // AlarmScreen is started as a separate Activity by AlarmReceiver,
-                    // so we don't need to navigate here for MVP
-                }
+                onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToAlarm = { _, _ -> }
             )
         }
         composable("settings") {
-            SettingsScreen(
-                onBack = {
-                    navController.popBackStack()
-                }
-            )
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
