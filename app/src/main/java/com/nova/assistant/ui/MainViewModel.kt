@@ -103,30 +103,54 @@ class MainViewModel @Inject constructor(
 
     private fun processCommand(text: String, inputType: String) {
         viewModelScope.launch {
+            _state.update { it.copy(isProcessing = true) }
             try {
-                val command = commandParser.parse(text)
-                val response = commandExecutor.execute(command, inputType)
+                // Handle greetings manually
+                val greeting = checkGreeting(text)
+                val response = if (greeting != null) {
+                    greeting
+                } else {
+                    val command = commandParser.parse(text)
+                    commandExecutor.execute(command, inputType)
+                }
 
                 _state.update { it.copy(isProcessing = false, isSpeaking = true) }
 
-                // Speak response
-                val prefsData = prefs.preferences.first()
-                ttsManager.setRate(prefsData.speechRate)
+                // Speak response safely
+                try {
+                    val prefsData = prefs.preferences.first()
+                    ttsManager.setRate(prefsData.speechRate)
+                } catch (_: Exception) {
+                    ttsManager.setRate(1.0f)
+                }
                 ttsManager.speak(
                     text = response,
-                    onDone = {
-                        _state.update { it.copy(isSpeaking = false) }
-                    }
+                    onDone = { _state.update { it.copy(isSpeaking = false) } }
                 )
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
                         isProcessing = false,
                         isListening = false,
-                        errorMessage = "خطا: ${e.message}"
+                        errorMessage = "متوجه نشدم. لطفاً دوباره بگید."
                     )
                 }
             }
+        }
+    }
+
+    private fun checkGreeting(text: String): String? {
+        val t = text.trim().lowercase()
+        return when {
+            t in listOf("سلام", "سلام.", "سلام!", "salam", "hello", "hi", "hey") ->
+                "سلام! من نُوا هستم، دستیار صوتی تو. چطور می‌تونم کمکت کنم؟ می‌تونی ازم بپرسی «ساعت چنده» یا بگی «آلارم بذار برای ساعت ۷ صبح»."
+            t.contains(Regex("خوبی|چطوری|حالت|چه خبر")) ->
+                "مرسی، خوبم! تو چطوری؟ هر کاری داشتی بگو برات انجام بدم."
+            t.contains(Regex("مرسی|ممنون|تشکر|دستت درد|دمت گرم")) ->
+                "خواهش می‌کنم! کاری دیگه‌ای هست برات انجام بدم؟"
+            t.contains(Regex("خداحافظ|بای|می‌بینمت|بعدا")) ->
+                "خداحافظ! هر وقت نیاز داشتی من اینجام. فقط صدایم کن."
+            else -> null
         }
     }
 

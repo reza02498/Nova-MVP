@@ -4,9 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,9 +45,7 @@ fun MainScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    var showPermissionDialog by remember { mutableStateOf(false) }
 
-    // Permission check
     val hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
@@ -57,176 +55,112 @@ fun MainScreen(
         if (granted) viewModel.startVoiceInput(context)
     }
 
-    // Auto-scroll to bottom
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.size - 1)
         }
     }
 
-    // Handle navigation events
     LaunchedEffect(state.navigateToSettings) {
-        if (state.navigateToSettings) {
-            viewModel.onNavigatedToSettings()
-            onNavigateToSettings()
-        }
-    }
-    LaunchedEffect(state.navigateToAlarm) {
-        state.navigateToAlarm?.let { (id, title) ->
-            viewModel.onAlarmHandled()
-            onNavigateToAlarm(id, title)
-        }
+        if (state.navigateToSettings) { viewModel.onNavigatedToSettings(); onNavigateToSettings() }
     }
 
-    // Error snackbar
-    state.errorMessage?.let { error ->
-        LaunchedEffect(error) {
-            delay(3000)
-            viewModel.clearError()
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // ─── TOP BAR ───
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color(0xFF0F0F1A),
+        topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("نُوا", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("ن", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text("نُوا", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
                         if (state.isListening) {
                             Spacer(Modifier.width(8.dp))
                             PulsingDot()
-                        }
-                        if (state.isSpeaking) {
-                            Spacer(Modifier.width(8.dp))
-                            Text("🔊", fontSize = 14.sp)
                         }
                     }
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "تنظیمات")
+                        Icon(Icons.Default.Settings, contentDescription = "تنظیمات", tint = Color.White.copy(alpha = 0.7f))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F0F1A))
             )
-
-            // ─── CHAT LIST ───
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(vertical = 12.dp)
-            ) {
-                if (state.messages.isEmpty()) {
-                    item {
-                        EmptyWelcome()
-                    }
-                }
-                items(state.messages, key = { "${it.isUser}_${it.timestamp}" }) { msg ->
-                    ChatBubble(message = msg)
-                }
-
-                // Partial result during voice
-                if (state.partialResult.isNotEmpty()) {
-                    item {
-                        ChatBubble(
-                            message = ChatMessage(text = state.partialResult, isUser = true),
-                            isPartial = true
-                        )
-                    }
-                }
-
-                // Processing indicator
-                if (state.isProcessing) {
-                    item {
-                        ProcessingBubble()
-                    }
-                }
-            }
-
-            // ─── ERROR BAR ───
-            state.errorMessage?.let { error ->
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.errorContainer
-                ) {
-                    Text(
-                        text = error,
-                        modifier = Modifier.padding(12.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            // ─── BOTTOM INPUT BAR ───
+        },
+        bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.surface
+                shadowElevation = 16.dp,
+                color = Color(0xFF1A1A2E)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
                         value = state.inputText,
-                        onValueChange = { viewModel.onInputTextChanged(it) },
+                        onValueChange = viewModel::onInputTextChanged,
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("فرمان خود را بنویسید...") },
+                        placeholder = { Text("فرمان خود را بنویسید...", color = Color(0xFF6B7280)) },
                         maxLines = 3,
-                        shape = RoundedCornerShape(24.dp)
+                        shape = RoundedCornerShape(28.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6366F1),
+                            unfocusedBorderColor = Color(0xFF374151),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFF6366F1),
+                            focusedContainerColor = Color(0xFF111122),
+                            unfocusedContainerColor = Color(0xFF111122),
+                        )
                     )
 
                     Spacer(Modifier.width(8.dp))
 
-                    // Send button
                     FilledIconButton(
-                        onClick = { viewModel.sendTextCommand() },
+                        onClick = viewModel::sendTextCommand,
                         enabled = state.inputText.isNotBlank() && !state.isProcessing,
                         modifier = Modifier.size(48.dp),
-                        shape = CircleShape
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color(0xFF6366F1),
+                            disabledContainerColor = Color(0xFF374151)
+                        )
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "ارسال")
+                        Icon(Icons.Default.Send, contentDescription = "ارسال", tint = Color.White)
                     }
 
                     Spacer(Modifier.width(4.dp))
 
-                    // Mic button
-                    val micColor = if (state.isListening)
-                        MaterialTheme.colorScheme.error
-                    else
-                        MaterialTheme.colorScheme.secondary
-
+                    val micColor = if (state.isListening) Color(0xFFEF4444) else Color(0xFF10B981)
                     FilledIconButton(
                         onClick = {
-                            if (state.isListening) {
-                                viewModel.stopVoiceInput()
-                            } else if (hasMicPermission) {
-                                viewModel.startVoiceInput(context)
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
+                            if (state.isListening) viewModel.stopVoiceInput()
+                            else if (hasMicPermission) viewModel.startVoiceInput(context)
+                            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         },
                         modifier = Modifier
                             .size(56.dp)
-                            .then(
-                                if (state.isListening) Modifier.scale(1.1f) else Modifier
-                            ),
+                            .shadow(if (state.isListening) 8.dp else 0.dp, CircleShape),
                         shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = micColor
-                        )
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = micColor)
                     ) {
                         Icon(
                             if (state.isListening) Icons.Default.Stop else Icons.Default.Mic,
@@ -238,28 +172,53 @@ fun MainScreen(
                 }
             }
         }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 12.dp),
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
+            if (state.messages.isEmpty() && !state.isProcessing) {
+                item { EmptyWelcome() }
+            }
+            items(state.messages, key = { "${it.isUser}_${it.timestamp}" }) { msg ->
+                ChatBubble(message = msg)
+            }
+            if (state.partialResult.isNotEmpty()) {
+                item { ChatBubble(message = ChatMessage(text = state.partialResult, isUser = true), isPartial = true) }
+            }
+            if (state.isProcessing) {
+                item { ProcessingBubble() }
+            }
+        }
+    }
 
-        // ─── READING CONTROL OVERLAY ───
-        if (state.isSpeaking) {
+    // Error Toast
+    state.errorMessage?.let { error ->
+        LaunchedEffect(error) {
+            delay(4000)
+            viewModel.clearError()
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
             Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 100.dp)
-                    .fillMaxWidth(0.7f),
-                shape = RoundedCornerShape(16.dp),
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.primaryContainer
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFEF4444).copy(alpha = 0.9f),
+                shadowElevation = 8.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("در حال خواندن...", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { viewModel.stopSpeaking() }) {
-                        Icon(Icons.Default.Stop, contentDescription = "قطع")
-                    }
-                }
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    color = Color.White
+                )
             }
         }
     }
@@ -267,47 +226,43 @@ fun MainScreen(
 
 @Composable
 private fun ChatBubble(message: ChatMessage, isPartial: Boolean = false) {
-    val bgColor = if (message.isUser)
-        MaterialTheme.colorScheme.primary
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-
-    val textColor = if (message.isUser)
-        MaterialTheme.colorScheme.onPrimary
-    else
-        MaterialTheme.colorScheme.onSurfaceVariant
-
     val alignment = if (message.isUser) Alignment.End else Alignment.Start
+
+    val bgColor = if (message.isUser)
+        Color(0xFF6366F1)
+    else
+        Color(0xFF1E1E3A)
+
     val shape = RoundedCornerShape(
-        topStart = 16.dp,
-        topEnd = 16.dp,
-        bottomStart = if (message.isUser) 16.dp else 4.dp,
-        bottomEnd = if (message.isUser) 4.dp else 16.dp
+        topStart = 18.dp, topEnd = 18.dp,
+        bottomStart = if (message.isUser) 18.dp else 6.dp,
+        bottomEnd = if (message.isUser) 6.dp else 18.dp
     )
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = alignment
-    ) {
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
+        if (!message.isUser) {
+            Text(
+                "نُوا", fontSize = 11.sp, color = Color(0xFF8B5CF6),
+                modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+            )
+        }
         Surface(
             modifier = Modifier.widthIn(max = 300.dp),
             shape = shape,
-            color = bgColor.copy(alpha = if (isPartial) 0.6f else 1f)
+            color = bgColor.copy(alpha = if (isPartial) 0.5f else 1f)
         ) {
             Text(
                 text = message.text,
-                modifier = Modifier.padding(12.dp),
-                color = textColor,
+                modifier = Modifier.padding(14.dp),
+                color = Color.White,
                 style = MaterialTheme.typography.bodyLarge
             )
         }
-
-        // Timestamp
         val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
         Text(
             text = timeFormat.format(Date(message.timestamp)),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            color = Color(0xFF6B7280),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
@@ -316,22 +271,14 @@ private fun ChatBubble(message: ChatMessage, isPartial: Boolean = false) {
 @Composable
 private fun ProcessingBubble() {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.Start
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
+        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E1E3A)) {
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp
-                )
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFF8B5CF6))
                 Spacer(Modifier.width(8.dp))
-                Text("در حال پردازش...", style = MaterialTheme.typography.bodyMedium)
+                Text("در حال پردازش...", color = Color(0xFF9CA3AF), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -339,58 +286,47 @@ private fun ProcessingBubble() {
 
 @Composable
 private fun PulsingDot() {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(800),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val alpha by transition.animateFloat(
+        initialValue = 0.4f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "alpha"
     )
-
-    Box(
-        modifier = Modifier
-            .size(10.dp)
-            .clip(CircleShape)
-            .background(Color(0xFF00E5FF).copy(alpha = alpha))
-    )
+    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF10B981).copy(alpha = alpha)))
 }
 
 @Composable
 private fun EmptyWelcome() {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Box(
+            modifier = Modifier.size(80.dp).clip(CircleShape).background(
+                Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)))
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("ن", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("نُوا", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "نُوا",
-            fontSize = 48.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            "دستیار صوتی فارسی", fontSize = 16.sp,
+            color = Color(0xFF8B5CF6), fontWeight = FontWeight.Medium
         )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "سلام! چی کار می‌تونم برات بکنم؟",
-            fontSize = 18.sp,
-            textAlign = TextAlign.Center
+        Spacer(Modifier.height(32.dp))
+        Text("چطور می‌تونم کمکت کنم؟", fontSize = 18.sp, color = Color(0xFFD1D5DB))
+        Spacer(Modifier.height(20.dp))
+        val hints = listOf(
+            "🔔 آلارم بذار برای ساعت ۷ صبح",
+            "📝 یادآوری کن نان بخرم فردا ساعت ۱۰",
+            "📩 پیامامو بخون",
+            "⏰ ساعت چنده",
+            "📅 امروز چندمه"
         )
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = """
-                |می‌تونی اینا رو امتحان کنی:
-                |🔔 آلارم بذار برای ساعت ۷ صبح
-                |📝 یادآوری کن نون بخرم فردا ساعت ۱۰
-                |📩 پیامامو بخون
-                |⏰ ساعت چنده
-                |📅 امروز چندمه
-            """.trimMargin(),
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
+        for (hint in hints) {
+            Text(hint, fontSize = 14.sp, color = Color(0xFF6B7280), modifier = Modifier.padding(vertical = 4.dp))
+        }
     }
 }
