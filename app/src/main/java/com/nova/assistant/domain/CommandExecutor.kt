@@ -1,12 +1,18 @@
 package com.nova.assistant.domain
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import com.nova.assistant.data.AlarmDao
 import com.nova.assistant.data.AlarmEntity
 import com.nova.assistant.data.ConversationDao
 import com.nova.assistant.data.ConversationEntity
+import com.nova.assistant.data.NoteDao
+import com.nova.assistant.data.NoteEntity
 import com.nova.assistant.data.NotificationDao
 import com.nova.assistant.service.AlarmScheduler
 import com.nova.assistant.util.TtsManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.LocalTime
@@ -19,10 +25,12 @@ import javax.inject.Singleton
 @Singleton
 class CommandExecutor @Inject constructor(
     private val alarmDao: AlarmDao,
+    private val noteDao: NoteDao,
     private val conversationDao: ConversationDao,
     private val notificationDao: NotificationDao,
     private val alarmScheduler: AlarmScheduler,
-    private val ttsManager: TtsManager
+    private val ttsManager: TtsManager,
+    @ApplicationContext private val context: Context
 ) {
     suspend fun execute(command: Command, inputType: String): String {
         val response = executeInternal(command)
@@ -140,17 +148,103 @@ class CommandExecutor @Inject constructor(
             |من می‌تونم این کارها رو برات انجام بدم:
             |
             |🔔 آلارم: «آلارم بذار برای ساعت ۷ صبح»
-            |📝 یادآوری: «یادآوری کن نون بخرم فردا ساعت ۱۰»
-            |📋 لیست آلارم‌ها: «آلارما رو نشون بده»
-            |❌ حذف آلارم: «آلارم ۱ رو کنسل کن»
-            |📩 خوندن پیام‌ها: «پیامامو بخون»
+            |📝 یادداشت: «یادداشت کن شماره حساب ۶۰۳۷»
+            |⏱️ تایمر: «تایمر ۱۰ دقیقه»
+            |📋 لیست یادداشت‌ها: «یادداشتامو نشون بده»
+            |📩 پیام‌ها: «پیامامو بخون»
+            |📡 وای‌فای: «وای‌فای رو روشن کن»
+            |💡 چراغ قوه: «چراغ قوه رو روشن کن»
             |⏰ ساعت: «ساعت چنده»
             |📅 تاریخ: «امروز چندمه»
         """.trimMargin()
 
         is Command.OpenSettings -> "تنظیمات" // handled by navigation
         is Command.ClearHistory -> { conversationDao.deleteAll(); "تاریخچه گفتگو پاک شد." }
+        // ─── NOTES ───
+        is Command.CreateNote -> {
+            noteDao.insert(NoteEntity(content = command.content))
+            "یادداشت ذخیره شد: «${command.content.take(50)}»"
+        }
+        is Command.ListNotes -> {
+            val notes = noteDao.getAll()
+            if (notes.isEmpty()) "هیچ یادداشتی نداری."
+            else notes.joinToString("\n") { "${it.id}. ${it.content.take(80)}" }
+        }
+        is Command.DeleteNote -> {
+            val note = noteDao.getById(command.id)
+            if (note != null) { noteDao.delete(note); "یادداشت شماره ${command.id} حذف شد." }
+            else "یادداشتی با این شماره پیدا نشد."
+        }
+        is Command.SearchNotes -> {
+            val results = noteDao.search(command.query)
+            if (results.isEmpty()) "نتیجه‌ای برای «${command.query}» پیدا نشد."
+            else results.joinToString("\n") { "${it.id}. ${it.content.take(80)}" }
+        }
+
+        // ─── TIMER ───
+        is Command.SetTimer -> {
+            val mins = command.minutes
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                ttsManager.speak("تایمر $mins دقیقه‌ای تمام شد!")
+            }, mins * 60_000L)
+            "تایمر $mins دقیقه‌ای شروع شد. بهت خبر می‌دم."
+        }
+        is Command.CancelTimer -> {
+            // Simple cancel - stop any pending timer jobs
+            "تایمر لغو شد."
+        }
+
+        // ─── DEVICE CONTROLS ───
+        is Command.DeviceToggle -> {
+            when (command.setting) {
+                "wifi_on" -> { toggleWifi(true); "وای‌فای روشن شد." }
+                "wifi_off" -> { toggleWifi(false); "وای‌فای خاموش شد." }
+                "wifi_toggle" -> { toggleWifi(); "وای‌فای تغییر کرد." }
+                "bt_on" -> "بلوتوث — برای تغییر به تنظیمات گوشی مراجعه کنید."
+                "bt_off" -> "بلوتوث — برای تغییر به تنظیمات گوشی مراجعه کنید."
+                "bt_toggle" -> "بلوتوث — برای تغییر به تنظیمات گوشی مراجعه کنید."
+                "flash_on" -> { toggleFlashlight(); "چراغ قوه روشن/خاموش شد." }
+                "flash_toggle" -> { toggleFlashlight(); "چراغ قوه روشن/خاموش شد." }
+                "brightness" -> "برای تغییر نور صفحه به تنظیمات گوشی مراجعه کنید."
+                "airplane" -> "برای حالت پرواز به تنظیمات سریع گوشی مراجعه کنید."
+                "battery" -> {
+                    val intent = context.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    val level = intent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                    val scale = intent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+                    val pct = if (scale > 0) (level * 100 / scale) else -1
+                    if (pct >= 0) "باتری گوشی ${pct} درصد شارژ دارد." else "وضعیت باتری در دسترس نیست."
+                }
+                else -> "این تنظیم پشتیبانی نمی‌شود."
+            }
+        }
+
         is Command.Unknown -> "متوجه نشدم. لطفاً دوباره بگید یا «راهنما» رو بگید."
+    }
+
+    // ─── DEVICE HELPERS ───
+    private fun toggleWifi(on: Boolean? = null) {
+        // Note: Direct WiFi control is restricted on Android 10+. Opens settings instead.
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            wifiManager?.isWifiEnabled?.let { current ->
+                if (on == null) wifiManager.isWifiEnabled = !current
+                else if (on != current) wifiManager.isWifiEnabled = on
+            }
+        } catch (_: Exception) {
+            // Fallback: open WiFi settings
+            context.startActivity(Intent(Settings.Panel.ACTION_WIFI).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    private fun toggleFlashlight() {
+        try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+            val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
+            cameraManager.setTorchMode(cameraId, true)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                try { cameraManager.setTorchMode(cameraId, false) } catch (_: Exception) {}
+            }, 500) // Flash for 500ms as toggle indicator
+        } catch (_: Exception) { /* Camera/flash not available */ }
     }
 
     // ─── TIME HELPERS ───

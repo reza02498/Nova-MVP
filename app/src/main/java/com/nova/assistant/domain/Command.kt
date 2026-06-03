@@ -28,5 +28,18 @@ sealed class Command {
     object OpenSettings : Command()
     object ClearHistory : Command()
 
+    // --- Notes ---
+    data class CreateNote(val content: String) : Command()
+    object ListNotes : Command()
+    data class DeleteNote(val id: Long) : Command()
+    data class SearchNotes(val query: String) : Command()
+
+    // --- Timer ---
+    data class SetTimer(val minutes: Int) : Command()
+    object CancelTimer : Command()
+
+    // --- Device Controls ---
+    data class DeviceToggle(val setting: String) : Command()
+
     object Unknown : Command()
 }

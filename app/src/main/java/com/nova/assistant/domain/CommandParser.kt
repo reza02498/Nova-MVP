@@ -1,167 +1,166 @@
 package com.nova.assistant.domain
 
-import java.time.DayOfWeek
+import com.nova.assistant.domain.context.ConversationContext
+import com.nova.assistant.domain.entity.DeviceAction
+import com.nova.assistant.domain.entity.DeviceTarget
+import com.nova.assistant.domain.entity.EntityExtractor
+import com.nova.assistant.domain.intent.Intent
+import com.nova.assistant.domain.intent.IntentClassifier
+import com.nova.assistant.domain.normalizer.PersianNormalizer
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
-class CommandParser @Inject constructor() {
+/**
+ * Command Understanding Engine — replaces the old if/else chain with a
+ * two-tier architecture:
+ *
+ *   Tier 1 — directMatch(): unambiguous commands bypass classification
+ *   Tier 2 — classify + extract + map: intent-based commands
+ *
+ * Public API preserved: fun parse(text: String): Command
+ */
+class CommandParser @Inject constructor(
+    private val normalizer: PersianNormalizer,
+    private val classifier: IntentClassifier,
+    private val extractor: EntityExtractor
+) {
+    private var lastContext: ConversationContext? = null
 
     fun parse(input: String): Command {
-        val text = normalize(input.trim())
+        if (input.isBlank()) return Command.Unknown
+        val text = normalizer.normalize(input)
         if (text.isEmpty()) return Command.Unknown
 
-        // Simple keyword-based matching (much more reliable than complex regex)
-        return parsePersian(text)
+        // ── Tier 1: Direct Commands (no ambiguity, no classification) ──
+        directMatch(text)?.let { return it }
+
+        // ── Tier 2: Intent-based Commands ──
+        val result = classifier.classify(text)
+        if (result.confidence < 0.4f || result.isUnknown) return Command.Unknown
+
+        val entities = extractor.extract(text, result.intent, lastContext)
+        val command = mapToCommand(result.intent, entities)
+
+        lastContext = ConversationContext(
+            lastIntent = result.intent,
+            lastEntities = entities,
+            timestamp = Instant.now()
+        )
+
+        return command
     }
 
-    private fun normalize(input: String): String {
-        return input
-            .replace("ي", "ی").replace("ك", "ک").replace("ة", "ه")
-            .replace("ؤ", "و").replace("أ", "ا").replace("إ", "ا")
-            .replace("٠", "0").replace("١", "1").replace("٢", "2")
-            .replace("٣", "3").replace("٤", "4").replace("٥", "5")
-            .replace("٦", "6").replace("٧", "7").replace("٨", "8").replace("٩", "9")
-            .replace("۰", "0").replace("۱", "1").replace("۲", "2")
-            .replace("۳", "3").replace("۴", "4").replace("۵", "5")
-            .replace("۶", "6").replace("۷", "7").replace("۸", "8").replace("۹", "9")
-            .replace(Regex("\\s+"), " ").trim()
+    // ═══════════════════════ TIER 1: DIRECT COMMANDS ═══════════════════════
+
+    private fun directMatch(text: String): Command? = when {
+        // Time
+        text.contains("ساعت") && containsAny(text, "چنده", "چند", "الان", "چند است") -> Command.GetTime
+        text == "ساعت" || text == "ساعت چنده" || text == "ساعت چند" -> Command.GetTime
+        // Date
+        containsAny(text, "امروز چندمه", "تاریخ امروز", "چه روزی", "چندمه", "چندم", "چند شنبه") -> Command.GetDate
+        text.contains("امروز") && text.contains("چند") -> Command.GetDate
+        // Help
+        text == "راهنما" || text == "کمک" || text == "help" || text == "؟" ||
+        containsAny(text, "چه کارایی", "چه کارا", "چیکار", "چی کار", "چکار", "چیا میتونی") -> Command.Help
+        // Settings
+        text.contains("تنظیمات") || text.contains("setting") || text.contains("ستینگ") -> Command.OpenSettings
+        // Clear history
+        containsAny(text, "پاک کن تاریخچه", "حذف تاریخچه", "حذف گفتگو", "پاک گفتگو", "تاریخچه پاک", "گفتگو حذف") -> Command.ClearHistory
+        text.contains("تاریخچه") && containsAny(text, "پاک", "حذف") -> Command.ClearHistory
+        // Reading controls
+        text == "بس کن" || text == "قطع کن" || text == "خاموش کن" || text == "بسه" ||
+        text == "قطع" || text == "خاموش" || text == "ساکت" || text == "stop" || text == "دیگه بسه" -> Command.StopReading
+        containsAny(text, "تندتر", "سریعتر", "سرعت بیشتر", "تندتر بخون", "تند بخون") -> Command.ReadFaster
+        containsAny(text, "یواشتر", "آرومتر", "آهسته تر", "کندتر", "یواشتر بخون", "یواش بخون", "آهسته بخون") -> Command.ReadSlower
+        // Brightness (informational only)
+        containsAny(text, "نور صفحه", "روشنایی صفحه", "نور", "brightness") &&
+        containsAny(text, "زیاد", "بالا", "ببر", "کم", "پایین") -> Command.DeviceToggle("brightness")
+        // Airplane mode (informational only)
+        containsAny(text, "حالت پرواز", "airplane") -> Command.DeviceToggle("airplane")
+        // Battery
+        containsAny(text, "باتری", "باطری", "شارژ") &&
+        containsAny(text, "چند", "چقدر", "وضعیت", "چنده", "چقدره", "چند درصده") -> Command.DeviceToggle("battery")
+        else -> null
     }
 
-    private fun parsePersian(text: String): Command {
-        // === ALARMS ===
+    // ═══════════════════════ TIER 2: MAPPER (private) ═══════════════════════
 
-        // Set alarm: "آلارم ۷ صبح" / "ساعت ۷ بیدارم کن" / "زنگ بزن ۷"
-        if (anyWord(text, "آلارم", "زنگ", "بیدارم کن", "بیدار کن", "کوک کن")) {
-            val time = extractTime(text)
-            if (time != null) {
-                val label = text.replace(Regex("آلارم|زنگ|بیدارم? کن|بذار|بزن|کوک کن|برای|ساعت|صبح|ظهر|عصر|شب|\\d.*"), "").trim()
-                return Command.SetAlarm(time, label.ifEmpty { null })
+    private fun mapToCommand(intent: Intent, e: com.nova.assistant.domain.entity.ExtractedEntities): Command {
+        return when (intent) {
+            // ── Alarms ──
+            Intent.SET_ALARM -> {
+                val time = e.time ?: return Command.Unknown
+                Command.SetAlarm(time, e.taskContent)
             }
-        }
-
-        // Reminder: "یادآوری کن نان بخر فردا ساعت ۱۰" / "یادآوری نان بخر برای فردا ۱۰"
-        if (text.contains("یادآوری") || text.contains("یاداوری") || text.contains("reminder")) {
-            val time = extractTime(text)
-            val date = extractRelativeDate(text)
-            if (time != null) {
-                val dt = LocalDateTime.of(date ?: LocalDate.now(), time)
-                val task = text.replace(Regex("یادآوری|یاداوری|کن|برای|رو|ساعت|صبح|ظهر|عصر|شب|\\d.*|فردا|امروز|پس فردا"), "").trim()
-                return Command.SetReminder(task.ifEmpty { "یادآوری" }, dt)
+            Intent.SET_REMINDER -> {
+                val time = e.time ?: return Command.Unknown
+                val date = e.date ?: LocalDate.now()
+                Command.SetReminder(e.taskContent ?: "یادآوری", LocalDateTime.of(date, time))
             }
-        }
+            Intent.LIST_ALARMS -> Command.ListAlarms
+            Intent.CANCEL_ALARM -> {
+                val id = e.number?.toLong() ?: return Command.Unknown
+                Command.CancelAlarm(id)
+            }
+            Intent.CANCEL_ALL_ALARMS -> Command.CancelAllAlarms
+            Intent.SNOOZE -> Command.Snooze(e.duration ?: 10)
 
-        // Show alarms: "آلارما رو نشون بده" / "چه آلارمایی داری"
-        if (anyWord(text, "آلارما", "آلارم ها", "چه آلارم", "لیست آلارم") && anyWord(text, "نشون", "بده", "داری", "بگو", "چی", "لیست"))
-            return Command.ListAlarms
+            // ── Timer ──
+            Intent.SET_TIMER -> {
+                val mins = e.duration ?: return Command.Unknown
+                Command.SetTimer(mins)
+            }
+            Intent.CANCEL_TIMER -> Command.CancelTimer
 
-        // Cancel all: "همه آلارما رو پاک کن"
-        if (anyWord(text, "همه", "تموم", "کل") && anyWord(text, "آلارم", "زنگ") && anyWord(text, "پاک", "حذف", "کنسل", "لغو"))
-            return Command.CancelAllAlarms
+            // ── Notes ──
+            Intent.CREATE_NOTE -> {
+                val content = e.taskContent ?: return Command.Unknown
+                Command.CreateNote(content)
+            }
+            Intent.LIST_NOTES -> Command.ListNotes
+            Intent.DELETE_NOTE -> {
+                val id = e.number?.toLong() ?: return Command.Unknown
+                Command.DeleteNote(id)
+            }
+            Intent.SEARCH_NOTES -> {
+                val query = e.taskContent ?: return Command.Unknown
+                Command.SearchNotes(query)
+            }
 
-        // Cancel one: "آلارم ۲ رو حذف کن" / "آلارم شماره ۳ پاک"
-        if (anyWord(text, "آلارم", "زنگ") && anyWord(text, "حذف", "پاک", "کنسل", "لغو", "قطع")) {
-            val num = extractNumber(text)
-            if (num != null) return Command.CancelAlarm(num.toLong())
-        }
+            // ── Device ──
+            Intent.TOGGLE_WIFI -> {
+                val action = e.deviceAction ?: DeviceAction.TOGGLE
+                val setting = when (action) {
+                    DeviceAction.ON -> "wifi_on"
+                    DeviceAction.OFF -> "wifi_off"
+                    else -> "wifi_toggle"
+                }
+                Command.DeviceToggle(setting)
+            }
+            Intent.TOGGLE_BLUETOOTH -> {
+                val action = e.deviceAction ?: DeviceAction.TOGGLE
+                val setting = when (action) {
+                    DeviceAction.ON -> "bt_on"
+                    DeviceAction.OFF -> "bt_off"
+                    else -> "bt_toggle"
+                }
+                Command.DeviceToggle(setting)
+            }
+            Intent.TOGGLE_FLASHLIGHT -> Command.DeviceToggle("flash_toggle")
 
-        // Snooze: "چرت ۱۰ دقیقه" / "اسنوز ۵"
-        if (anyWord(text, "چرت", "اسنوز", "snooze")) {
-            val mins = extractNumber(text) ?: 10
-            return Command.Snooze(mins)
-        }
+            // ── Notifications ──
+            Intent.READ_NOTIFICATIONS -> Command.ReadNotifications
+            Intent.READ_LAST_MESSAGE -> Command.ReadLastMessage
 
-        // === NOTIFICATIONS ===
-        if (text.contains("پیام") && anyWord(text, "بخون", "نشون", "بده", "چک", "چی دارم", "چه پیام"))
-            return Command.ReadNotifications
-
-        if (text.contains("آخرین پیام") || text.contains("پیام آخر") || (text.contains("آخر") && text.contains("پیام")))
-            return Command.ReadLastMessage
-
-        // === READING CONTROLS ===
-        if (text == "بس کن" || text == "قطع کن" || text == "خاموش کن" || text == "بسه" || text == "قطع" || text == "خاموش" || text == "ساکت" || text == "stop")
-            return Command.StopReading
-        if (anyWord(text, "تندتر", "سریعتر", "سرعت بیشتر") || text.contains("تندتر بخون"))
-            return Command.ReadFaster
-        if (anyWord(text, "یواشتر", "آرومتر", "آهسته تر", "کندتر") || text.contains("یواشتر بخون"))
-            return Command.ReadSlower
-
-        // === GENERAL ===
-        if (text.contains("ساعت") && anyWord(text, "چنده", "چند", "چند است", "چنده الان", "الان"))
-            return Command.GetTime
-
-        if (anyWord(text, "امروز چندمه", "تاریخ امروز", "چه روزی", "چندمه", "چندم است") || (text.contains("امروز") && text.contains("چند")))
-            return Command.GetDate
-
-        if (text.contains("راهنما") || text == "راهنما" || text == "کمک" || text.contains("چه کارایی") || text.contains("چیکار") || text == "help" || text == "؟")
-            return Command.Help
-
-        if (text.contains("تنظیمات") || text.contains("setting"))
-            return Command.OpenSettings
-
-        if (anyWord(text, "پاک کن تاریخچه", "حذف تاریخچه", "حذف گفتگو", "پاک گفتگو", "clear history", "پاک کردن تاریخچه"))
-            return Command.ClearHistory
-
-        // === NUMERIC ALARM CANCEL (when user just says "حذف ۲") ===
-        if (anyWord(text, "حذف", "پاک کن", "پاک", "کنسل") && extractNumber(text) != null)
-            return Command.CancelAlarm(extractNumber(text)!!.toLong())
-
-        return Command.Unknown
-    }
-
-    // ─── HELPERS ───
-
-    private fun anyWord(text: String, vararg words: String): Boolean {
-        return words.any { text.contains(it) }
-    }
-
-    private fun extractNumber(text: String): Int? {
-        return Regex("(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull()
-    }
-
-    private fun extractTime(text: String): LocalTime? {
-        // Match Persian time patterns
-        val match = Regex("(\\d{1,2})\\s*(?:[:.؛:]\\s*(\\d{1,2}))?\\s*(صبح|ظهر|عصر|بعدازظهر|شب)?").find(text)
-            ?: return null
-
-        val hour = match.groupValues[1].toIntOrNull() ?: return null
-        val minute = match.groupValues[2].toIntOrNull() ?: 0
-        val period = match.groupValues[3]
-
-        val adjustedHour = when {
-            period.contains("صبح") -> if (hour == 12) 0 else hour
-            period.contains("ظهر") || period.contains("عصر") || period.contains("بعدازظهر") ->
-                if (hour == 12) 12 else hour + 12
-            period.contains("شب") -> if (hour == 12) 0 else hour + 12
-            hour in 0..5 -> hour + 12  // 1-5 means PM in Persian context
-            else -> hour.coerceIn(0, 23)
-        }
-        return LocalTime.of(adjustedHour, minute.coerceIn(0, 59))
-    }
-
-    private fun extractRelativeDate(text: String): LocalDate? {
-        val now = LocalDate.now()
-        return when {
-            text.contains("امروز") -> now
-            text.contains("فردا") -> now.plusDays(1)
-            text.contains("پس فردا") -> now.plusDays(2)
-            text.contains("دیروز") -> now.minusDays(1)
-            text.contains("شنبه") -> nextDayOfWeek(now, DayOfWeek.SATURDAY)
-            text.contains("یکشنبه") || text.contains("یک شنبه") -> nextDayOfWeek(now, DayOfWeek.SUNDAY)
-            text.contains("دوشنبه") || text.contains("دو شنبه") -> nextDayOfWeek(now, DayOfWeek.MONDAY)
-            text.contains("سه شنبه") -> nextDayOfWeek(now, DayOfWeek.TUESDAY)
-            text.contains("چهارشنبه") || text.contains("چهار شنبه") -> nextDayOfWeek(now, DayOfWeek.WEDNESDAY)
-            text.contains("پنجشنبه") || text.contains("پنج شنبه") -> nextDayOfWeek(now, DayOfWeek.THURSDAY)
-            text.contains("جمعه") -> nextDayOfWeek(now, DayOfWeek.FRIDAY)
-            else -> null
+            Intent.UNKNOWN -> Command.Unknown
         }
     }
 
-    private fun nextDayOfWeek(from: LocalDate, target: DayOfWeek): LocalDate {
-        val daysUntil = (target.value - from.dayOfWeek.value + 7) % 7
-        return if (daysUntil == 0) from.plusDays(7) else from.plusDays(daysUntil.toLong())
-    }
+    // ═══════════════════════ HELPERS ═══════════════════════
+
+    private fun containsAny(text: String, vararg words: String): Boolean =
+        words.any { text.contains(it) }
 }
