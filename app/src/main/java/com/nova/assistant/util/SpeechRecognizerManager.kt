@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 class SpeechRecognizerManager(private val context: Context) {
 
     private var recognizer: SpeechRecognizer? = null
+    private var hasTriedEnglish = false
 
     fun startListening(
         onResult: (String) -> Unit,
@@ -17,10 +18,11 @@ class SpeechRecognizerManager(private val context: Context) {
         onRmsChanged: (Float) -> Unit
     ) {
         if (SpeechRecognizer.isRecognitionAvailable(context).not()) {
-            onError("Speech recognition not available on this device")
+            onError("تشخیص گفتار روی این دستگاه در دسترس نیست.")
             return
         }
 
+        hasTriedEnglish = false
         recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
             setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: android.os.Bundle) {
@@ -42,20 +44,34 @@ class SpeechRecognizerManager(private val context: Context) {
 
                 override fun onError(error: Int) {
                     val msg = when (error) {
-                        SpeechRecognizer.ERROR_AUDIO -> "Audio error"
-                        SpeechRecognizer.ERROR_CLIENT -> "Client error"
-                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "No microphone permission"
-                        SpeechRecognizer.ERROR_NETWORK -> "Network error"
-                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-                        SpeechRecognizer.ERROR_NO_MATCH -> "No speech match"
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
-                        SpeechRecognizer.ERROR_SERVER -> "Server error"
-                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected"
-                        else -> "Speech error code: $error"
+                        SpeechRecognizer.ERROR_AUDIO -> "خطای ضبط صدا. میکروفن در دسترس نیست."
+                        SpeechRecognizer.ERROR_CLIENT -> "خطای داخلی برنامه."
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "دسترسی به میکروفن داده نشده."
+                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> {
+                            if (!hasTriedEnglish) {
+                                // Persian offline model not available — try English
+                                hasTriedEnglish = true
+                                startWithEnglish(onResult, onPartialResult, onError, onRmsChanged)
+                                return
+                            } else {
+                                "خطای شبکه. برای تشخیص گفتار آفلاین، بسته زبان فارسی را از تنظیمات گوشی دانلود کنید."
+                            }
+                        }
+                        SpeechRecognizer.ERROR_NO_MATCH -> return // Silent — no speech detected
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "میکروفن در حال استفاده است. لطفاً صبر کنید."
+                        SpeechRecognizer.ERROR_SERVER -> {
+                            if (!hasTriedEnglish) {
+                                hasTriedEnglish = true
+                                startWithEnglish(onResult, onPartialResult, onError, onRmsChanged)
+                                return
+                            } else {
+                                "مشکل در ارتباط با سرور گفتار. لطفاً از تایپ متنی استفاده کنید یا بسته زبان فارسی را دانلود کنید."
+                            }
+                        }
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "صدایی تشخیص داده نشد. لطفاً بلندتر صحبت کنید."
+                        else -> "خطای تشخیص گفتار (کد $error). لطفاً از تایپ متنی استفاده کنید."
                     }
-                    if (error != SpeechRecognizer.ERROR_NO_MATCH) {
-                        onError(msg)
-                    }
+                    onError(msg)
                 }
 
                 override fun onReadyForSpeech(params: android.os.Bundle) {}
@@ -66,6 +82,15 @@ class SpeechRecognizerManager(private val context: Context) {
             })
         }
 
+        startWithPersian(onResult, onPartialResult, onError, onRmsChanged)
+    }
+
+    private fun startWithPersian(
+        onResult: (String) -> Unit,
+        onPartialResult: (String) -> Unit,
+        onError: (String) -> Unit,
+        onRmsChanged: (Float) -> Unit
+    ) {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
@@ -73,7 +98,22 @@ class SpeechRecognizerManager(private val context: Context) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
         }
+        recognizer?.startListening(intent)
+    }
 
+    private fun startWithEnglish(
+        onResult: (String) -> Unit,
+        onPartialResult: (String) -> Unit,
+        onError: (String) -> Unit,
+        onRmsChanged: (Float) -> Unit
+    ) {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+        }
         recognizer?.startListening(intent)
     }
 
