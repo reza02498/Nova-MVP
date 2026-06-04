@@ -42,32 +42,32 @@ class IntentClassifier @Inject constructor() {
         if (def.requiresNumber && !hasNumber(text)) return 0f
         if (def.requiresTime && !hasTime(text)) return 0f
 
-        // Positive keywords (weight 1.0)
+        // Positive keywords (weight 1.0) — word boundary matching
         var matched = 0f
         val matchedWords = mutableListOf<String>()
         for (kw in def.positiveKeywords) {
-            if (text.contains(kw)) {
+            if (matchesWord(text, kw)) {
                 matched += 1.0f
                 matchedWords.add(kw)
             }
         }
 
-        // Synonyms (weight 0.8 per GROUP — only best variation per group counts)
+        // Synonyms (weight 0.8 per GROUP — word boundary matching)
         var synonymScore = 0f
         for (group in def.synonyms) {
             for (v in group.variations) {
-                if (text.contains(v)) {
+                if (matchesWord(text, v)) {
                     synonymScore += 0.8f
                     matchedWords.add(v)
-                    break  // only one match per synonym group
+                    break
                 }
             }
         }
 
-        // Negative penalty
+        // Negative penalty — word boundary matching
         var penalty = 0f
         for (nw in def.negativeKeywords) {
-            if (text.contains(nw)) penalty += 1.5f
+            if (matchesWord(text, nw)) penalty += 1.5f
         }
 
         // Max score: positiveKeywords count + one 0.8 per synonym group
@@ -79,8 +79,8 @@ class IntentClassifier @Inject constructor() {
 
     private fun collectKeywords(text: String, def: IntentDefinition): List<String> {
         val words = mutableListOf<String>()
-        for (kw in def.positiveKeywords) if (text.contains(kw)) words.add(kw)
-        for (g in def.synonyms) for (v in g.variations) if (text.contains(v)) words.add(v)
+        for (kw in def.positiveKeywords) if (matchesWord(text, kw)) words.add(kw)
+        for (g in def.synonyms) for (v in g.variations) if (matchesWord(text, v)) words.add(v)
         return words
     }
 
@@ -93,10 +93,23 @@ class IntentClassifier @Inject constructor() {
     private fun hasWordNumber(text: String): Boolean {
         val words = listOf("یک", "دو", "سه", "چهار", "پنج", "شش", "هفت", "هشت", "نه", "ده",
             "اول", "دوم", "سوم", "چهارم", "پنجم", "نیم", "one", "two", "three", "four", "five")
-        return words.any { text.contains(it) }
+        return words.any { matchesWord(text, it) }
     }
 
     private fun hasTime(text: String): Boolean =
         Regex("\\d{1,2}\\s*(?:[:.؛:]\\s*\\d{1,2})?\\s*(صبح|ظهر|عصر|بعدازظهر|شب|بعد از ظهر|am|pm)?").containsMatchIn(text) ||
-        text.contains("ساعت") || text.contains("نیم") || text.contains("ربع")
+        matchesWord(text, "ساعت") || matchesWord(text, "نیم") || matchesWord(text, "ربع")
+
+    /** Word boundary match — prevents substring false positives like "نت" inside "نتونستم" */
+    private fun matchesWord(text: String, keyword: String): Boolean {
+        val idx = text.indexOf(keyword)
+        if (idx == -1) return false
+        val before = if (idx == 0) ' ' else text[idx - 1]
+        val after = if (idx + keyword.length >= text.length) ' ' else text[idx + keyword.length]
+        return !before.isLetterOrDigit() && !after.isLetterOrDigit()
+    }
+
+    /** Check if any word in the list matches as a whole word */
+    private fun containsAnyWord(text: String, words: List<String>): Boolean =
+        words.any { matchesWord(text, it) }
 }

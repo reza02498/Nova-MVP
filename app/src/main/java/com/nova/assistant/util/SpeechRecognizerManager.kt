@@ -90,18 +90,18 @@ class SpeechRecognizerManager(context: Context) {
 
                     val msg = when (error) {
                         SpeechRecognizer.ERROR_AUDIO ->
-                            "خطای میکروفن. لطفاً مطمئن شوید میکروفن در دسترس است."
+                            "🎤 خطای میکروفن — مطمئن شوید میکروفن توسط برنامه دیگری استفاده نمیشود."
                         SpeechRecognizer.ERROR_CLIENT ->
-                            "خطای سیستمی در تشخیص صدا. لطفاً دوباره تلاش کنید."
+                            "⚙️ خطای سیستمی — لطفاً دوباره تلاش کنید."
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
-                            "دسترسی به میکروفن داده نشده است. لطفاً از تنظیمات گوشی دسترسی را فعال کنید."
+                            "🔒 دسترسی میکروفن داده نشده — از تنظیمات گوشی > برنامهها > Nova > مجوزها، دسترسی میکروفن را فعال کنید."
                         SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> {
                             if (!hasTriedEnglish) {
                                 hasTriedEnglish = true
                                 startWithEnglish(onResult, onPartialResult, onError, onRmsChanged)
                                 return
                             } else {
-                                "خطای شبکه. برای تشخیص گفتار آفلاین، بسته زبان فارسی را از تنظیمات گوشی دانلود کنید."
+                                "📡 خطای شبکه + بسته زبان آفلاین نصب نیست. برای تشخیص گفتار فارسی:\n۱. به اینترنت وصل شوید\n۲. یا بسته زبان فارسی را از مسیر زیر دانلود کنید:\nتنظیمات > زبان و ورودی > تشخیص گفتار Google > آفلاین > فارسی"
                             }
                         }
                         SpeechRecognizer.ERROR_NO_MATCH -> {
@@ -110,17 +110,17 @@ class SpeechRecognizerManager(context: Context) {
                                 fullTranscript = StringBuilder()
                                 return
                             }
-                            "صدایی تشخیص داده نشد. لطفاً بلندتر صحبت کنید."
+                            "🎙️ تشخیص گفتار ناموفق. دو دلیل رایج:\n۱. بسته زبان فارسی نصب نیست — از تنظیمات گوشی دانلود کنید\n۲. صدای محیط زیاد است — در جای ساکتتر تلاش کنید"
                         }
                         SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
-                            "سیستم تشخیص صدا مشغول است. لطفاً چند لحظه صبر کنید و دوباره تلاش کنید."
+                            "⏳ سیستم تشخیص صدا مشغول است — چند لحظه صبر کنید."
                         SpeechRecognizer.ERROR_SERVER -> {
                             if (!hasTriedEnglish) {
                                 hasTriedEnglish = true
                                 startWithEnglish(onResult, onPartialResult, onError, onRmsChanged)
                                 return
                             } else {
-                                "خطای سرور تشخیص گفتار. لطفاً از تایپ متنی استفاده کنید."
+                                "🌐 سرور تشخیص گفتار در دسترس نیست. لطفاً از تایپ متنی استفاده کنید یا بسته زبان آفلاین را نصب کنید."
                             }
                         }
                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
@@ -129,9 +129,9 @@ class SpeechRecognizerManager(context: Context) {
                                 fullTranscript = StringBuilder()
                                 return
                             }
-                            "مدت زیادی سکوت کردید. لطفاً دوباره تلاش کنید."
+                            "⏰ صدایی دریافت نشد — لطفاً دوباره تلاش کنید و نزدیکتر به میکروفن صحبت کنید."
                         }
-                        else -> "خطای تشخیص گفتار. لطفاً از تایپ متنی استفاده کنید."
+                        else -> "❓ خطای تشخیص گفتار (کد $error). لطفاً از تایپ متنی استفاده کنید."
                     }
                     currentOnError?.invoke(msg)
                 }

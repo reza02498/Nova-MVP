@@ -187,7 +187,6 @@ class CommandExecutor @Inject constructor(
 
         // ─── TIMER ───
         is Command.SetTimer -> {
-            timerHandler?.removeCallbacks(timerRunnable)
             val mins = command.minutes
             val runnable = Runnable { ttsManager.speak("تایمر $mins دقیقه‌ای تمام شد!") }
             timerRunnable = runnable
@@ -196,9 +195,11 @@ class CommandExecutor @Inject constructor(
             "تایمر $mins دقیقه‌ای شروع شد. بهت خبر می‌دم."
         }
         is Command.CancelTimer -> {
-            if (timerHandler == null || timerRunnable == null) "تایمر فعالی وجود ندارد."
+            val handler = timerHandler
+            val runnable = timerRunnable
+            if (handler == null || runnable == null) "تایمر فعالی وجود ندارد."
             else {
-                timerHandler?.removeCallbacks(timerRunnable)
+                handler.removeCallbacks(runnable)
                 timerHandler = null
                 timerRunnable = null
                 "تایمر لغو شد."
