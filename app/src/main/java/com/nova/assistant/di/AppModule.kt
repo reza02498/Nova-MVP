@@ -26,7 +26,7 @@ object AppModule {
             context,
             NovaDatabase::class.java,
             NovaDatabase.NAME
-        ).fallbackToDestructiveMigration().build()
+        ).addMigrations(NovaDatabase.MIGRATION_1_2).build()
     }
 
     @Provides

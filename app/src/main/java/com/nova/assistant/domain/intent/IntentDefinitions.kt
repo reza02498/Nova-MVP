@@ -10,7 +10,7 @@ object IntentDefinitions {
         // ═══ DEVICE CONTROLS ═══
         IntentDefinition(
             intent = Intent.TOGGLE_WIFI,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("وای فای", "وایفای", "wifi"),
             synonyms = listOf(
                 SynonymGroup("وای فای", listOf("وای‌فای", "وایفای", "وایرلس", "بی‌سیم", "اینترنت", "نت", "شبکه")),
@@ -26,7 +26,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.TOGGLE_BLUETOOTH,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("بلوتوث", "bluetooth"),
             synonyms = listOf(
                 SynonymGroup("بلوتوث", listOf("بلوتوس", "بلوتوت", "bluetooth", "bt")),
@@ -42,7 +42,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.TOGGLE_FLASHLIGHT,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("چراغ قوه", "فلش", "flashlight"),
             synonyms = listOf(
                 SynonymGroup("چراغ قوه", listOf("چراق قوه", "چراغقوه", "فلش", "فلش لایت", "flashlight", "torch", "چراغ", "نور گوشی", "روشنایی گوشی")),
@@ -58,7 +58,7 @@ object IntentDefinitions {
         // ═══ ALARMS ═══
         IntentDefinition(
             intent = Intent.SET_ALARM,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("آلارم", "زنگ", "بیدار", "کوک"),
             synonyms = listOf(
                 SynonymGroup("آلارم", listOf("الارم", "زنگ", "هشدار", "یادآور")),
@@ -74,7 +74,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.SET_REMINDER,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("یادآوری", "یادم بنداز", "یادم بیار"),
             synonyms = listOf(
                 SynonymGroup("یادآوری", listOf("یاداوری", "یاد اوری", "یادم بنداز", "یادم بیار", "reminder", "یادم باشه")),
@@ -89,7 +89,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.LIST_ALARMS,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("آلارم", "زنگ"),
             synonyms = listOf(
                 SynonymGroup("لیست", listOf("نشون بده", "بده", "داری", "بگو", "چی", "چیا", "کدوم", "برنامه", "لیست کن", "نمایش"))
@@ -102,7 +102,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.CANCEL_ALARM,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("آلارم", "زنگ"),
             synonyms = listOf(
                 SynonymGroup("حذف", listOf("پاک کن", "کنسل", "لغو", "قطع", "بردار", "remove"))
@@ -143,7 +143,7 @@ object IntentDefinitions {
         // ═══ TIMER ═══
         IntentDefinition(
             intent = Intent.SET_TIMER,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("تایمر", "timer"),
             synonyms = listOf(
                 SynonymGroup("تایمر", listOf("تایمز", "تایم", "زمانسنج", "کرنومتر", "شمارشگر", "timer")),
@@ -159,7 +159,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.CANCEL_TIMER,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("تایمر", "timer"),
             synonyms = listOf(
                 SynonymGroup("حذف", listOf("قطع", "کنسل", "لغو", "خاموش کن", "استاپ", "بسه", "بس کن", "stop"))
@@ -173,7 +173,7 @@ object IntentDefinitions {
         // ═══ NOTES ═══
         IntentDefinition(
             intent = Intent.CREATE_NOTE,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("یادداشت", "بنویس", "ثبت کن"),
             synonyms = listOf(
                 SynonymGroup("یادداشت", listOf("یاداشت", "نوشته", "note", "memo", "یادگاری")),
@@ -188,7 +188,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.LIST_NOTES,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("یادداشت", "یاداشت"),
             synonyms = listOf(
                 SynonymGroup("لیست", listOf("نشون بده", "بده", "بیار", "بگو", "چی", "چیا", "دارم", "نوشتم", "نمایش"))
@@ -201,7 +201,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.DELETE_NOTE,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("یادداشت", "یاداشت"),
             synonyms = listOf(
                 SynonymGroup("حذف", listOf("پاک", "بردار", "حذف کن", "پاک کن", "remove"))
@@ -215,7 +215,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.SEARCH_NOTES,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("یادداشت", "یاداشت"),
             synonyms = listOf(
                 SynonymGroup("جستجو", listOf("بگرد", "پیدا کن", "سرچ", "search", "find", "بگرد تو"))
@@ -229,7 +229,7 @@ object IntentDefinitions {
         // ═══ NOTIFICATIONS ═══
         IntentDefinition(
             intent = Intent.READ_NOTIFICATIONS,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("پیام", "اعلان", "نوتیف"),
             synonyms = listOf(
                 SynonymGroup("پیام", listOf("پیغام", "اعلان", "نوتیفیکیشن", "پیامک", "message", "notification", "sms")),
@@ -243,7 +243,7 @@ object IntentDefinitions {
         ),
         IntentDefinition(
             intent = Intent.READ_LAST_MESSAGE,
-            threshold = 0.4f,
+            threshold = 0.30f,
             positiveKeywords = listOf("آخرین پیام", "پیام آخر", "آخرین اعلان"),
             synonyms = listOf(
                 SynonymGroup("آخرین", listOf("آخر", "اخر", "جدیدترین", "تازه‌ترین", "last", "latest"))

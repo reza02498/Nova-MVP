@@ -39,7 +39,7 @@ class CommandParser @Inject constructor(
 
         // ── Tier 2: Intent-based Commands ──
         val result = classifier.classify(text)
-        if (result.confidence < 0.4f || result.isUnknown) return Command.Unknown
+        if (result.isUnknown) return Command.Unknown
 
         val entities = extractor.extract(text, result.intent, lastContext)
         val command = mapToCommand(result.intent, entities)
@@ -55,13 +55,19 @@ class CommandParser @Inject constructor(
 
     // ═══════════════════════ TIER 1: DIRECT COMMANDS ═══════════════════════
 
+    private val imperativeVerbs = listOf("بگو", "بگین", "نشون بده", "ببین", "ببینم", "چنده", "چند", "چند است", "چیه", "چطوره")
+    private val timeSynonyms = listOf("ساعت", "ساعته", "زمان", "وقت", "تایم", "time")
+
     private fun directMatch(text: String): Command? = when {
-        // Time
-        text.contains("ساعت") && containsAny(text, "چنده", "چند", "الان", "چند است") -> Command.GetTime
+        // Time — recognizes time synonyms + question/imperative patterns
+        timeSynonyms.any { text.contains(it) } && imperativeVerbs.any { text.contains(it) } -> Command.GetTime
+        timeSynonyms.any { text.contains(it) } && text.contains("الان") -> Command.GetTime
+        text.contains("الان") && containsAny(text, "چنده", "چند وقته", "چند") -> Command.GetTime
         text == "ساعت" || text == "ساعت چنده" || text == "ساعت چند" -> Command.GetTime
         // Date
         containsAny(text, "امروز چندمه", "تاریخ امروز", "چه روزی", "چندمه", "چندم", "چند شنبه") -> Command.GetDate
         text.contains("امروز") && text.contains("چند") -> Command.GetDate
+        text.contains("تاریخ") && containsAny(text, "بگو", "نشون بده", "چیه", "چندمه") -> Command.GetDate
         // Help
         text == "راهنما" || text == "کمک" || text == "help" || text == "؟" ||
         containsAny(text, "چه کارایی", "چه کارا", "چیکار", "چی کار", "چکار", "چیا میتونی") -> Command.Help

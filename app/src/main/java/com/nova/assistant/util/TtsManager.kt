@@ -12,6 +12,8 @@ class TtsManager(context: Context) {
     @Volatile private var isReady = false
     private var currentRate = 1.0f
     private var currentLocale: Locale = Locale("fa")
+    private var retryCount = 0
+    private val maxRetries = 10
 
     init {
         tts = TextToSpeech(context) { status ->
@@ -46,12 +48,16 @@ class TtsManager(context: Context) {
 
     fun speak(text: String, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
         if (!isReady || tts == null) {
-            // TTS not ready yet — queue or retry
+            if (retryCount++ >= maxRetries) {
+                retryCount = 0
+                return // Give up after max retries
+            }
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 speak(text, onStart, onDone)
             }, 500)
             return
         }
+        retryCount = 0
 
         // Always ensure Persian locale is set before speaking
         if (tts?.language != currentLocale) {

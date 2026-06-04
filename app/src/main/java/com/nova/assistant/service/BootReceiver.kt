@@ -34,5 +34,5 @@ fun NovaDatabase.Companion.getInstance(context: Context): NovaDatabase {
         context.applicationContext,
         NovaDatabase::class.java,
         NovaDatabase.NAME
-    ).fallbackToDestructiveMigration().build()
+    ).addMigrations(NovaDatabase.MIGRATION_1_2).build()
 }

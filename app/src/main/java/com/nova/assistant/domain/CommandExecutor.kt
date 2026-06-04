@@ -32,6 +32,10 @@ class CommandExecutor @Inject constructor(
     private val ttsManager: TtsManager,
     @ApplicationContext private val context: Context
 ) {
+    private var timerHandler: android.os.Handler? = null
+    private var timerRunnable: Runnable? = null
+    private var flashlightOn: Boolean = false
+
     suspend fun execute(command: Command, inputType: String): String {
         val response = executeInternal(command)
         // Save conversation
@@ -183,15 +187,22 @@ class CommandExecutor @Inject constructor(
 
         // ─── TIMER ───
         is Command.SetTimer -> {
+            timerHandler?.removeCallbacks(timerRunnable)
             val mins = command.minutes
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                ttsManager.speak("تایمر $mins دقیقه‌ای تمام شد!")
-            }, mins * 60_000L)
+            val runnable = Runnable { ttsManager.speak("تایمر $mins دقیقه‌ای تمام شد!") }
+            timerRunnable = runnable
+            timerHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            timerHandler?.postDelayed(runnable, mins * 60_000L)
             "تایمر $mins دقیقه‌ای شروع شد. بهت خبر می‌دم."
         }
         is Command.CancelTimer -> {
-            // Simple cancel - stop any pending timer jobs
-            "تایمر لغو شد."
+            if (timerHandler == null || timerRunnable == null) "تایمر فعالی وجود ندارد."
+            else {
+                timerHandler?.removeCallbacks(timerRunnable)
+                timerHandler = null
+                timerRunnable = null
+                "تایمر لغو شد."
+            }
         }
 
         // ─── DEVICE CONTROLS ───
@@ -240,10 +251,10 @@ class CommandExecutor @Inject constructor(
         try {
             val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
             val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
-            cameraManager.setTorchMode(cameraId, true)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                try { cameraManager.setTorchMode(cameraId, false) } catch (_: Exception) {}
-            }, 500) // Flash for 500ms as toggle indicator
+            // Toggle: if on, turn off. If off, turn on.
+            // CameraManager doesn't expose current state, so use a simple tracking flag
+            cameraManager.setTorchMode(cameraId, !flashlightOn)
+            flashlightOn = !flashlightOn
         } catch (_: Exception) { /* Camera/flash not available */ }
     }
 

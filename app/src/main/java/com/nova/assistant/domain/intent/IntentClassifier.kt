@@ -52,15 +52,14 @@ class IntentClassifier @Inject constructor() {
             }
         }
 
-        // Synonyms (weight 0.8)
+        // Synonyms (weight 0.8 per GROUP — only best variation per group counts)
         var synonymScore = 0f
-        var totalSynonyms = 0
         for (group in def.synonyms) {
-            totalSynonyms += group.variations.size
             for (v in group.variations) {
                 if (text.contains(v)) {
                     synonymScore += 0.8f
                     matchedWords.add(v)
+                    break  // only one match per synonym group
                 }
             }
         }
@@ -71,7 +70,8 @@ class IntentClassifier @Inject constructor() {
             if (text.contains(nw)) penalty += 1.5f
         }
 
-        val maxScore = def.positiveKeywords.size.toFloat() + totalSynonyms.toFloat() * 0.8f
+        // Max score: positiveKeywords count + one 0.8 per synonym group
+        val maxScore = def.positiveKeywords.size.toFloat() + def.synonyms.size.toFloat() * 0.8f
         if (maxScore == 0f) return 0f
 
         return ((matched + synonymScore - penalty) / maxScore).coerceIn(0f, 1f)
