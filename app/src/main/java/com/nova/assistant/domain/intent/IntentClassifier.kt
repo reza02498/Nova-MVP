@@ -33,6 +33,7 @@ class IntentClassifier @Inject constructor() {
             }
         }
 
+        android.util.Log.d("NovaClassifier", "Best: ${bestResult.intent} score=$bestScore threshold=${getThreshold(bestResult.intent)}")
         return if (bestScore >= getThreshold(bestResult.intent)) bestResult
         else IntentResult.unknown()
     }

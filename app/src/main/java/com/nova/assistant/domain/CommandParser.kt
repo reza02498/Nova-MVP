@@ -39,6 +39,7 @@ class CommandParser @Inject constructor(
 
         // ── Tier 2: Intent-based Commands ──
         val result = classifier.classify(text)
+        android.util.Log.d("NovaParser", "Intent=${result.intent} conf=${result.confidence} keywords=${result.matchedKeywords}")
         if (result.isUnknown) return Command.Unknown
 
         val entities = extractor.extract(text, result.intent, lastContext)
