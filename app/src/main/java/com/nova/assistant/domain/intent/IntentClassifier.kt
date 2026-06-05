@@ -97,8 +97,14 @@ class IntentClassifier @Inject constructor() {
     }
 
     private fun hasTime(text: String): Boolean =
+        // Clock time: "۷ صبح", "07:00", "۷:۳۰"
         Regex("\\d{1,2}\\s*(?:[:.؛:]\\s*\\d{1,2})?\\s*(صبح|ظهر|عصر|بعدازظهر|شب|بعد از ظهر|am|pm)?").containsMatchIn(text) ||
-        matchesWord(text, "ساعت") || matchesWord(text, "نیم") || matchesWord(text, "ربع")
+        matchesWord(text, "ساعت") || matchesWord(text, "نیم") || matchesWord(text, "ربع") ||
+        // Relative duration: "۲ دقیقه دیگه", "5 دقیقه", "۱۰ دقیقه دیگه"
+        hasDuration(text)
+
+    private fun hasDuration(text: String): Boolean =
+        Regex("\\d+\\s*دقیقه|\\d+\\s*ساعت|\\d+\\s*ثانیه|نیم ساعت|ربع ساعت|\\d+\\s*دقه").containsMatchIn(text)
 
     /** Word boundary match — prevents substring false positives like "نت" inside "نتونستم" */
     private fun matchesWord(text: String, keyword: String): Boolean {

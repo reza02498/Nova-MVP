@@ -63,6 +63,16 @@ class EntityExtractor @Inject constructor() {
     // ═══════════════════════ EXTRACTION HELPERS ═══════════════════════
 
     fun extractTime(text: String): LocalTime? {
+        // Check for relative duration first: "۲ دقیقه دیگه", "5 دقیقه دیگه"
+        val durationMatch = Regex("(\\d+)\\s*دقیقه\\s*دیگه|in\\s+(\\d+)\\s*minute|(\\d+)\\s*min").find(text)
+        if (durationMatch != null) {
+            val mins = (durationMatch.groupValues[1].toIntOrNull()
+                ?: durationMatch.groupValues[2].toIntOrNull()
+                ?: durationMatch.groupValues[3].toIntOrNull()
+                ?: 0)
+            if (mins > 0) return LocalTime.now().plusMinutes(mins.toLong())
+        }
+
         val match = Regex("(\\d{1,2})\\s*(?:[:.؛:]\\s*(\\d{1,2}))?\\s*(صبح|ظهر|عصر|بعدازظهر|شب|بعد از ظهر)?")
             .find(text) ?: return null
 
